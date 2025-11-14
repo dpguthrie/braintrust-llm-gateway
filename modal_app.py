@@ -17,7 +17,7 @@ image = (
         "pydantic-settings>=2.0.0",
         "python-multipart>=0.0.6",
     )
-    .copy_local_dir("src/llm_gateway", "/root/src/llm_gateway")
+    .copy_local_dir("src/llm_gateway", "/root/llm_gateway")
 )
 
 
@@ -30,6 +30,6 @@ image = (
 @modal.asgi_app()
 def fastapi_app():
     """Deploy FastAPI application."""
-    from src.llm_gateway.main import app
+    from llm_gateway.main import app
 
     return app

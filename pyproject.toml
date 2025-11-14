@@ -20,6 +20,9 @@ dev = [
     "httpx>=0.25.0",
     "ruff>=0.1.0",
 ]
+deploy = [
+    "modal>=0.63.0",
+]
 
 [build-system]
 requires = ["hatchling"]
