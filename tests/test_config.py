@@ -1,5 +1,5 @@
-import os
 import pytest
+
 from llm_gateway.config import Settings
 
 
