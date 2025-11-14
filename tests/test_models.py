@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
-from llm_gateway.models import ChatMessage, ChatCompletionRequest
+
+from llm_gateway.models import ChatCompletionRequest, ChatMessage
 
 
 def test_chat_message_requires_role_and_content():
