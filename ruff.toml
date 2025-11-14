@@ -1,0 +1,12 @@
+# Extend pyproject.toml ruff configuration
+extend = "pyproject.toml"
+
+[lint]
+# Additional rules can be added here as needed
+unfixable = []
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
