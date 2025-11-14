@@ -7,7 +7,7 @@ app = modal.App("llm-gateway")
 
 # Define container image with dependencies
 image = (
-    modal.Image.debian_slim(python_version="3.11")
+    modal.Image.debian_slim(python_version="3.13")
     .pip_install(
         "fastapi>=0.104.0",
         "uvicorn>=0.24.0",
