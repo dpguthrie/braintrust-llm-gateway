@@ -20,8 +20,8 @@ async def lifespan(app: FastAPI):
     # Initialize Braintrust logger
     logger = braintrust.init_logger(project=settings.project_name)
 
-    # Patch LiteLLM for automatic tracing
-    braintrust.patch_litellm()
+    # Wrap LiteLLM for automatic tracing
+    braintrust.wrap_litellm(litellm)
 
     yield
 
@@ -51,7 +51,7 @@ async def chat_completions(
     """
     OpenAI-compatible chat completions endpoint.
 
-    Automatically traced by Braintrust via patch_litellm().
+    Automatically traced by Braintrust via wrap_litellm().
     """
     try:
         # Convert request to dict for LiteLLM
