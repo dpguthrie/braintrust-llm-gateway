@@ -2,6 +2,16 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+@pytest.fixture(autouse=True)
+def clear_settings_cache():
+    """Clear settings cache before each test."""
+    from llm_gateway import config
+
+    config._get_settings.cache_clear()
+    yield
+    config._get_settings.cache_clear()
+
+
 @pytest.fixture
 def test_env(monkeypatch):
     """Set up test environment variables."""
