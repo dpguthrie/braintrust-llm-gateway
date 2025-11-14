@@ -1,7 +1,7 @@
 import pytest
 from fastapi import HTTPException
+
 from llm_gateway.auth import verify_bearer_token
-from llm_gateway.config import Settings
 
 
 @pytest.fixture(autouse=True)
