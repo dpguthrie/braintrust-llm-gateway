@@ -66,7 +66,7 @@ async def chat_completions(
             async def generate():
                 async for chunk in response:
                     # Format as SSE
-                    yield f"data: {chunk.model_dump_json()}\n\n"
+                    yield f"data: {chunk.model_dump_json()}\n\n"  # type: ignore[attr-defined]
                 yield "data: [DONE]\n\n"
 
             return StreamingResponse(
@@ -76,7 +76,7 @@ async def chat_completions(
         else:
             # Non-streaming response
             response = await litellm.acompletion(**params)
-            return response.model_dump()
+            return response.model_dump()  # type: ignore[attr-defined]
 
     except Exception as e:
         # Pass through LiteLLM errors
