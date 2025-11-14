@@ -5,26 +5,18 @@ import modal
 # Create Modal app
 app = modal.App("llm-gateway")
 
-# Define container image with dependencies
+# Define container image with dependencies from pyproject.toml
 image = (
     modal.Image.debian_slim(python_version="3.13")
-    .pip_install(
-        "fastapi>=0.104.0",
-        "uvicorn>=0.24.0",
-        "litellm>=1.0.0",
-        "braintrust>=0.0.1",
-        "pydantic>=2.0.0",
-        "pydantic-settings>=2.0.0",
-        "python-multipart>=0.0.6",
-    )
-    .copy_local_dir("src/llm_gateway", "/root/llm_gateway")
+    .uv_sync()  # Uses pyproject.toml and uv.lock for dependencies
+    .add_local_python_source("llm_gateway", "src/llm_gateway")  # Add source code
 )
 
 
 @app.function(
     image=image,
     secrets=[
-        modal.Secret.from_name("llm-gateway-secrets"),
+        modal.Secret.from_dotenv(__file__),  # Load secrets from .env file
     ],
 )
 @modal.asgi_app()

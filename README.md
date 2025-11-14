@@ -157,6 +157,7 @@ All requests are automatically logged to Braintrust:
 
 - Modal account ([modal.com](https://modal.com))
 - Modal CLI: `pip install modal`
+- `uv` package manager installed
 
 ### Setup
 
@@ -166,10 +167,14 @@ All requests are automatically logged to Braintrust:
 modal setup
 ```
 
-2. Create Modal secret with your API keys:
+2. Create a `.env` file with your API keys:
 
-Go to [modal.com/secrets](https://modal.com/secrets) and create a secret named `llm-gateway-secrets` with:
+```bash
+cp .env.example .env
+# Edit .env with your actual keys
+```
 
+Required variables:
 ```
 BRAINTRUST_API_KEY=your-braintrust-key
 GATEWAY_AUTH_TOKEN=your-token-1,your-token-2
@@ -177,13 +182,23 @@ OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
 ```
 
-3. Deploy:
+3. Ensure you have a `uv.lock` file:
+
+```bash
+uv sync
+```
+
+4. Deploy:
 
 ```bash
 modal deploy modal_app.py
 ```
 
-4. Get your deployment URL from the output:
+The deployment uses:
+- `uv_sync()` to install dependencies from `pyproject.toml` and `uv.lock`
+- `Secret.from_dotenv()` to load environment variables from your `.env` file
+
+5. Get your deployment URL from the output:
 
 ```
 ✓ Created web function fastapi_app => https://your-app-id--llm-gateway-fastapi-app.modal.run

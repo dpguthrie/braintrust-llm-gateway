@@ -64,7 +64,7 @@ async def chat_completions(
             response = await litellm.acompletion(**params)
 
             async def generate():
-                async for chunk in response:
+                async for chunk in response:  # type: ignore[attr-defined]
                     # Format as SSE
                     yield f"data: {chunk.model_dump_json()}\n\n"  # type: ignore[attr-defined]
                 yield "data: [DONE]\n\n"
