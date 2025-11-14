@@ -1,23 +1,26 @@
 # LLM Gateway with Braintrust Tracing
 
-Demo-quality LLM gateway that automatically instruments all requests with Braintrust tracing.
+Demo-quality LLM gateway that automatically instruments all requests with distributed Braintrust tracing.
 
 ## Features
 
-- **Automatic Tracing**: Every LLM request automatically logged to Braintrust
-- **Multi-Provider**: Support for OpenAI, Anthropic, and 100+ models via LiteLLM
+- **Distributed Tracing**: Parent span propagation for complete trace hierarchy
+- **Automatic Instrumentation**: Every LLM request automatically logged to Braintrust
+- **Multi-Provider**: Support for OpenAI and Anthropic (easily extensible)
 - **OpenAI Compatible**: Works with any OpenAI SDK client
 - **Simple Auth**: Bearer token authentication
 - **Streaming**: Full support for streaming responses
-- **Modal Deployment**: Easy serverless deployment
+- **Modal Deployment**: Easy serverless deployment with uv
 
 ## Architecture
 
 ```
-Client → FastAPI Gateway → LiteLLM → OpenAI/Anthropic/etc.
-                ↓
-         Braintrust Tracing
+[Client App] --HTTP--> [LLM Gateway] --API--> [LLM Provider]
+     |                      |                      |
+ [BT Span]          [BT Child Span]         [Response]
 ```
+
+The gateway creates child spans that link to client application spans, maintaining complete trace hierarchy from application → gateway → LLM provider.
 
 ## Local Development
 
@@ -137,11 +140,72 @@ for chunk in stream:
 
 ### Supported Models
 
-Any model supported by LiteLLM works. Examples:
+The gateway automatically routes requests based on model name:
 
-- OpenAI: `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-3.5-turbo`
-- Anthropic: `claude-3-5-sonnet-20241022`, `claude-3-opus-20240229`, `claude-3-haiku-20240307`
-- See [LiteLLM docs](https://docs.litellm.ai/docs/providers) for full list
+- **OpenAI**: `gpt-4o`, `gpt-4o-mini`, `gpt-4`, `gpt-3.5-turbo`, `o1-*`, etc.
+- **Anthropic**: `claude-3-5-sonnet-*`, `claude-3-opus-*`, `claude-3-haiku-*`, etc.
+
+### Distributed Tracing
+
+The gateway supports parent span propagation for distributed tracing. This allows client applications to link their spans with gateway spans, creating a complete trace hierarchy.
+
+**Without parent span (basic usage):**
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8000/v1",
+    api_key="your-token-here",
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hello"}],
+)
+# Gateway creates independent span in Braintrust
+```
+
+**With parent span (distributed tracing):**
+
+```python
+import braintrust
+from openai import OpenAI
+
+# Initialize your application's tracing
+experiment = braintrust.init(project="my-app")
+
+with experiment.traced(name="my-app-task") as parent_span:
+    client = OpenAI(
+        base_url="http://localhost:8000/v1",
+        api_key="your-gateway-token",
+    )
+
+    # Pass parent span context via header
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Hello"}],
+        extra_headers={
+            "x-braintrust-parent": parent_span.export()
+        }
+    )
+
+# Creates trace hierarchy: my-app-task → gateway-request → openai-completion
+```
+
+The response includes a `braintrust_span` field with the gateway span context, allowing you to continue the trace chain if needed.
+
+**Trace Hierarchy Example:**
+
+```
+Root Span (Client: "process-document")
+└── Child Span (Gateway: "llm-gateway-request")
+    └── Grandchild Span (Provider: "openai.chat.completions.create")
+        ├── input: {...}
+        ├── output: {...}
+        ├── metrics: {tokens: 150}
+        └── latency: 1.2s
+```
 
 ### Viewing Traces
 
@@ -150,6 +214,7 @@ All requests are automatically logged to Braintrust:
 1. Go to [braintrust.dev](https://braintrust.dev)
 2. Navigate to your project (default: "llm-gateway")
 3. View traces with full request/response data, token counts, and latency
+4. If using distributed tracing, see complete hierarchy from client → gateway → provider
 
 ## Modal Deployment
 
@@ -240,14 +305,31 @@ client = OpenAI(
 
 ## How It Works
 
-### Automatic Tracing
+### Distributed Tracing Architecture
 
-The gateway uses Braintrust's LiteLLM integration for zero-config tracing:
+The gateway uses Braintrust's provider-specific wrappers for automatic instrumentation with distributed tracing support:
 
-1. On startup: `braintrust.patch_litellm()` wraps all LiteLLM calls
-2. Each request: LiteLLM automatically creates Braintrust spans
-3. Captures: inputs, outputs, tokens, latency, time-to-first-token, model metadata
-4. No manual span management needed!
+1. **On startup**:
+   - Initializes Braintrust logger for the gateway project
+   - Wraps OpenAI and Anthropic clients with `braintrust.wrap_openai()` and `braintrust.wrap_anthropic()`
+
+2. **On each request**:
+   - Extracts optional `x-braintrust-parent` header (parent span from client)
+   - Creates gateway span with `start_span()`, linking to parent if provided
+   - Routes to appropriate provider based on model name
+   - Wrapped client automatically creates child span under gateway span
+   - Returns response with `braintrust_span` field for continued tracing
+
+3. **Trace hierarchy created**:
+   ```
+   Client Span (optional)
+   └── Gateway Span (llm-gateway-request)
+       └── Provider Span (openai.chat.completions.create)
+   ```
+
+4. **Automatic capture**: inputs, outputs, tokens, latency, time-to-first-token, model metadata
+
+The gateway acts as a transparent proxy while maintaining complete observability through distributed tracing.
 
 ### Authentication
 
@@ -266,10 +348,11 @@ For production, consider:
 
 This gateway is designed for demos showing:
 
-1. **How to add observability to LLM apps**: Show Braintrust traces in real-time
-2. **Multi-provider routing**: Switch models by changing request parameter
-3. **OpenAI SDK compatibility**: Drop-in replacement for OpenAI API
-4. **Serverless deployment**: Deploy to Modal in minutes
+1. **Distributed tracing in LLM apps**: Show complete trace hierarchy from client app through gateway to provider
+2. **How to add observability to LLM apps**: Show Braintrust traces with automatic instrumentation
+3. **Multi-provider routing**: Automatically route to OpenAI or Anthropic based on model name
+4. **OpenAI SDK compatibility**: Drop-in replacement for OpenAI API
+5. **Serverless deployment**: Deploy to Modal in minutes with uv
 
 ## Limitations (By Design)
 

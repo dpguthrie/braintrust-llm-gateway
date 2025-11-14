@@ -1,6 +1,17 @@
 import pytest
+from pydantic import ValidationError
 
 from llm_gateway.config import Settings
+
+
+@pytest.fixture(autouse=True)
+def clear_settings_cache():
+    """Clear settings cache before each test."""
+    from llm_gateway import config
+
+    config._get_settings.cache_clear()
+    yield
+    config._get_settings.cache_clear()
 
 
 def test_settings_requires_braintrust_api_key(monkeypatch):
@@ -8,8 +19,8 @@ def test_settings_requires_braintrust_api_key(monkeypatch):
     monkeypatch.delenv("BRAINTRUST_API_KEY", raising=False)
     monkeypatch.delenv("GATEWAY_AUTH_TOKEN", raising=False)
 
-    with pytest.raises(Exception):  # Pydantic ValidationError
-        Settings()
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)  # Don't load from .env file
 
 
 def test_settings_requires_gateway_auth_token(monkeypatch):
@@ -17,8 +28,8 @@ def test_settings_requires_gateway_auth_token(monkeypatch):
     monkeypatch.setenv("BRAINTRUST_API_KEY", "test-key")
     monkeypatch.delenv("GATEWAY_AUTH_TOKEN", raising=False)
 
-    with pytest.raises(Exception):  # Pydantic ValidationError
-        Settings()
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)  # Don't load from .env file
 
 
 def test_settings_loads_successfully_with_required_vars(monkeypatch):
