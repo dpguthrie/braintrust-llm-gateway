@@ -31,9 +31,18 @@ def test_env(monkeypatch):
 
 @pytest.fixture
 def client(test_env):
-    """Create test client with mocked OpenAI client."""
-    # Mock the OpenAI client before importing the app
-    with patch("llm_gateway.main.braintrust.wrap_openai") as mock_wrap:
+    """Create test client with mocked Braintrust components."""
+    # Mock the Braintrust init_logger and wrap_openai
+    with (
+        patch("llm_gateway.main.braintrust.init_logger") as mock_init_logger,
+        patch("llm_gateway.main.braintrust.wrap_openai") as mock_wrap,
+    ):
+        # Create a mock logger
+        mock_logger = MagicMock()
+        mock_logger.flush = MagicMock()
+        mock_logger.log = MagicMock()
+        mock_init_logger.return_value = mock_logger
+
         # Create a mock client
         mock_client = MagicMock()
         mock_wrap.return_value = mock_client
@@ -47,7 +56,15 @@ def test_full_request_flow_non_streaming(client):
     """Test complete request flow for non-streaming."""
     import llm_gateway.main
 
+    # Create a more complete mock response
+    mock_message = MagicMock()
+    mock_message.content = "Hello! How can I help?"
+
+    mock_choice = MagicMock()
+    mock_choice.message = mock_message
+
     mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
     mock_response.model_dump.return_value = {
         "id": "chatcmpl-test",
         "object": "chat.completion",
@@ -63,7 +80,10 @@ def test_full_request_flow_non_streaming(client):
         "usage": {"prompt_tokens": 10, "completion_tokens": 8, "total_tokens": 18},
     }
 
-    # Mock the openai_client's chat.completions.create method
+    # Mock the gateway_logger and openai_client
+    llm_gateway.main.gateway_logger = MagicMock()
+    llm_gateway.main.gateway_logger.log = MagicMock()
+
     llm_gateway.main.openai_client = MagicMock()
     llm_gateway.main.openai_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -76,12 +96,15 @@ def test_full_request_flow_non_streaming(client):
         },
     )
 
+    if response.status_code != 200:
+        print(f"Error response: {response.json()}")
     assert response.status_code == 200
     data = response.json()
     assert data["model"] == "gpt-4o-mini"
     assert data["choices"][0]["message"]["content"] == "Hello! How can I help?"
     assert data["usage"]["total_tokens"] == 18
-    assert "braintrust_span" in data  # Verify span context is returned
+    # No braintrust_span expected since no x-braintrust-parent header was provided
+    assert "braintrust_span" not in data
 
 
 def test_request_with_optional_parameters(client):
