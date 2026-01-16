@@ -26,7 +26,7 @@ The gateway creates child spans that link to client application spans, maintaini
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.13+
 - [uv](https://github.com/astral-sh/uv) for package management
 - Braintrust account and API key
 - API keys for LLM providers (OpenAI, Anthropic, etc.)
@@ -41,11 +41,15 @@ cd custom-llm-gateway
 uv pip install -e ".[dev]"
 ```
 
-2. Create `.env` file:
+2. Create a `.env` file (this repo does not include a `.env.example`):
 
 ```bash
-cp .env.example .env
-# Edit .env with your API keys
+cat > .env <<'EOF'
+BRAINTRUST_API_KEY=...
+GATEWAY_AUTH_TOKEN=your-token-1,your-token-2
+OPENAI_API_KEY=...
+ANTHROPIC_API_KEY=...
+EOF
 ```
 
 Required environment variables:
@@ -145,7 +149,7 @@ The gateway automatically routes requests based on model name:
 - **OpenAI**: `gpt-4o`, `gpt-4o-mini`, `gpt-4`, `gpt-3.5-turbo`, `o1-*`, etc.
 - **Anthropic**: `claude-3-5-sonnet-*`, `claude-3-opus-*`, `claude-3-haiku-*`, etc.
 
-### Distributed Tracing
+### Distributed tracing
 
 The gateway supports parent span propagation for distributed tracing. This allows client applications to link their spans with gateway spans, creating a complete trace hierarchy.
 
@@ -166,7 +170,7 @@ response = client.chat.completions.create(
 # Gateway creates independent span in Braintrust
 ```
 
-**With parent span (distributed tracing):**
+**With parent span (distributed tracing via `x-bt-parent`):**
 
 ```python
 import braintrust
@@ -181,12 +185,14 @@ with experiment.traced(name="my-app-task") as parent_span:
         api_key="your-gateway-token",
     )
 
-    # Pass parent span context via header
+    # Pass parent span context via header (Braintrust standard)
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": "Hello"}],
         extra_headers={
-            "x-braintrust-parent": parent_span.export()
+            "x-bt-parent": parent_span.export(),
+            # Optional JSON object (must be an object, not a string/array):
+            "x-bt-span-metadata": '{"request_id":"req_123","customer":"acme"}',
         }
     )
 
@@ -194,6 +200,30 @@ with experiment.traced(name="my-app-task") as parent_span:
 ```
 
 The response includes a `braintrust_span` field with the gateway span context, allowing you to continue the trace chain if needed.
+
+**With W3C baggage (recommended for Java/OTEL ecosystems):**
+
+If your client and gateway are OpenTelemetry-instrumented, you can propagate the Braintrust parent via W3C baggage:
+
+- Set `baggage: braintrust.parent=project_name:my-project` (or `experiment_id:...`)
+- Also propagate `traceparent` for full distributed tracing across services
+
+The Python gateway will read `braintrust.parent` from the `baggage` header and create a child Braintrust span accordingly.
+
+**Example (curl)**:
+
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer your-token-here" \
+  -H "Content-Type: application/json" \
+  -H "baggage: braintrust.parent=project_name:my-project" \
+  -d '{
+    "model": "gpt-4o-mini",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+If you also propagate `traceparent`, you’ll get full distributed tracing across services (client ↔ gateway) in any OTEL backend; Braintrust will still use `braintrust.parent` for routing spans to the right project/experiment.
 
 **Trace Hierarchy Example:**
 
@@ -235,8 +265,12 @@ modal setup
 2. Create a `.env` file with your API keys:
 
 ```bash
-cp .env.example .env
-# Edit .env with your actual keys
+cat > .env <<'EOF'
+BRAINTRUST_API_KEY=...
+GATEWAY_AUTH_TOKEN=your-token-1,your-token-2
+OPENAI_API_KEY=...
+ANTHROPIC_API_KEY=...
+EOF
 ```
 
 Required variables:
@@ -314,7 +348,7 @@ The gateway uses Braintrust's provider-specific wrappers for automatic instrumen
    - Wraps OpenAI and Anthropic clients with `braintrust.wrap_openai()` and `braintrust.wrap_anthropic()`
 
 2. **On each request**:
-   - Extracts optional `x-braintrust-parent` header (parent span from client)
+   - Extracts optional `x-bt-parent` header (parent span from client), or W3C baggage `braintrust.parent`
    - Creates gateway span with `start_span()`, linking to parent if provided
    - Routes to appropriate provider based on model name
    - Wrapped client automatically creates child span under gateway span

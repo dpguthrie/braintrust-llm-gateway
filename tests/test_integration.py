@@ -85,7 +85,9 @@ def test_full_request_flow_non_streaming(client):
     llm_gateway.main.gateway_logger.log = MagicMock()
 
     llm_gateway.main.openai_client = MagicMock()
-    llm_gateway.main.openai_client.chat.completions.create = AsyncMock(return_value=mock_response)
+    llm_gateway.main.openai_client.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
 
     response = client.post(
         "/v1/chat/completions",
@@ -103,7 +105,7 @@ def test_full_request_flow_non_streaming(client):
     assert data["model"] == "gpt-4o-mini"
     assert data["choices"][0]["message"]["content"] == "Hello! How can I help?"
     assert data["usage"]["total_tokens"] == 18
-    # No braintrust_span expected since no x-braintrust-parent header was provided
+    # No braintrust_span expected since no parent header/context was provided
     assert "braintrust_span" not in data
 
 
@@ -112,7 +114,9 @@ def test_request_with_optional_parameters(client):
     import llm_gateway.main
 
     mock_response = MagicMock()
-    mock_response.model_dump.return_value = {"choices": [{"message": {"content": "Response"}}]}
+    mock_response.model_dump.return_value = {
+        "choices": [{"message": {"content": "Response"}}]
+    }
 
     # Mock the openai_client
     mock_create = AsyncMock(return_value=mock_response)
@@ -146,7 +150,9 @@ def test_error_handling(client):
 
     # Mock the openai_client to raise an error
     llm_gateway.main.openai_client = MagicMock()
-    llm_gateway.main.openai_client.chat.completions.create = AsyncMock(side_effect=Exception("API Error"))
+    llm_gateway.main.openai_client.chat.completions.create = AsyncMock(
+        side_effect=Exception("API Error")
+    )
 
     response = client.post(
         "/v1/chat/completions",
